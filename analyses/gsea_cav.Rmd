@@ -1,0 +1,100 @@
+---
+title: "GSEA - CAV"
+author: "Kaushik Amancherla"
+date: "2025-02-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(msigdbr)
+library(fgsea)
+library(forcats)
+```
+
+## GSEA
+
+I will first create the function to take the betas and nominal P-values for gene ranking. Then, I will run GSEA on a per-cell-type basis. I will priortize the Hallmark pathways.
+
+```{r}
+perform_gsea_by_cell_type_GLMM <- function(df, gene_sets) {
+  cell_type_list <- split(df, df$ct)
+  gsea_results <- lapply(cell_type_list, function(cell_df) {
+    cell_df <- cell_df %>% filter(!is.na(beta) & !is.na(p_value) & !is.na(genei))
+    if (nrow(cell_df) < 5) {
+      return(data.frame())
+    }
+    cell_df$GSEA_score <- sign(cell_df$beta) * (-log10(cell_df$p_value))
+    ranked_genes <- setNames(cell_df$GSEA_score, cell_df$genei)
+    ranked_genes <- ranked_genes[is.finite(ranked_genes)]
+    gsea_res <- fgsea(pathways = gene_sets, stats = ranked_genes, minSize = 5, maxSize = 500, nperm = 1000)
+    gsea_res <- as.data.frame(gsea_res) %>%
+      mutate(ct = unique(cell_df$ct))
+    
+    return(gsea_res)
+  })
+  gsea_results_combined <- bind_rows(gsea_results)
+  return(gsea_results_combined)
+}
+
+# Run GSEA
+set.seed(3)
+gsea.cav.acr_pre <- perform_gsea_by_cell_type_GLMM(glmm_acr_pre_cav, gene_sets)
+
+# Remove the HALLMARK_ portion of the pathway
+gsea.cav.acr_pre <- gsea.cav.acr_pre %>%
+  mutate(pathway = str_remove(pathway, "^HALLMARK_"))
+
+# Add significance stars for pathways with padj < 0.05
+gsea.cav.acr_pre <- gsea.cav.acr_pre %>%
+  mutate(significance = ifelse(padj < 0.05, "***", ""))
+table(gsea.cav.acr_pre$pathway)
+
+# Rename pathways to make them easier to read
+gsea.cav.acr_pre <- gsea.cav.acr_pre %>%
+  mutate(
+    pathway = case_when(
+      pathway == "EPITHELIAL_MESENCHYMAL_TRANSITION" ~ "EMT",
+      pathway == "APICAL_JUNCTION" ~ "Apical junction",
+      pathway == "KRAS_SIGNALING_UP" ~ "KRAS signaling up",
+      pathway == "IL2_STAT5_SIGNALING" ~ "IL2-STAT5 signaling",
+      pathway == "INFLAMMATORY_RESPONSE" ~ "Inflammatory response",
+      pathway == "TNFA_SIGNALING_VIA_NFKB" ~ "TNFα signaling via NFKβ",
+      pathway == "COMPLEMENT" ~ "Complement",
+      pathway == "INTERFERON_GAMMA_RESPONSE" ~ "IFNγ response",
+      pathway == "ALLOGRAFT_REJECTION" ~ "Allograft rejection",
+      pathway == "ADIPOGENESIS" ~ "Adipogenesis",
+      pathway == "ANDROGEN_RESPONSE" ~ "Androgen response",
+      pathway == "ANGIOGENESIS" ~ "Angiogenesis",
+      pathway == "APICAL_SURFACE" ~ "Apical surface",
+      pathway == "APOPTOSIS" ~ "Apoptosis",
+      pathway == "COAGULATION" ~ "Coagulation",
+      pathway == "E2F_TARGETS" ~ "E2F targets",
+      pathway == "ESTROGEN_RESPONSE_EARLY" ~ "Estrogen response (early)",
+      pathway == "ESTROGEN_RESPONSE_LATE" ~ "Estrogen response (late)",
+      pathway == "FATTY_ACID_METABOLISM" ~ "Fatty acid metabolism",
+      pathway == "G2M_CHECKPOINT" ~ "G2M checkpoint",
+      pathway == "GLYCOLYSIS" ~ "Glycolysis",
+      pathway == "HEME_METABOLISM" ~ "Heme metabolism",
+      pathway == "HYPOXIA" ~ "Hypoxia",
+      pathway == "IL6_JAK_STAT3_SIGNALING" ~ "IL6-JAK-STAT3 signaling",
+      pathway == "INTERFERON_ALPHA_RESPONSE" ~ "IFNα response",
+      pathway == "KRAS_SIGNALING_DN" ~ "KRAS signaling down",
+      pathway == "MITOTIC_SPINDLE" ~ "Mitotic spindle",
+      pathway == "MYOGENESIS" ~ "Myogenesis",
+      pathway == "P53_PATHWAY" ~ "p53 pathway",
+      pathway == "PANCREAS_BETA_CELLS" ~ "Pancreas β cells",
+      pathway == "UV_RESPONSE_DN" ~ "UV response (down)",
+      pathway == "UV_RESPONSE_UP" ~ "UV response (up)",
+      pathway == "XENOBIOTIC_METABOLISM" ~ "Xenobiotic metabolism",
+      TRUE ~ pathway
+    )
+  )
+```
+
+## Session info
+
+```{r}
+sessionInfo()
+```
