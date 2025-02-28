@@ -14,13 +14,14 @@ Kaushik Amancherla, MD, MSCI<sup>1,3*</sup>, Angela M. Taravella Oill, PhD<sup>2
 Division of Critical Care Medicine, Department of Anesthesiology, Vanderbilt University Medical Center, Nashville, TN<br>
 
 
-\* indicates equal contribution (1st authors)
+\* indicates equal contribution (1st authors)<br>
 ‡ indicates equal contribution as senior authors
 
 
 Corresponding Authors:<br>
 Ravi V Shah, MD, ravi.shah@vumc.org<br>
 Nicholas Banovich, PhD, nbanovich@tgen.org 
+
 
 **BiorXiv preprint:** 
 
