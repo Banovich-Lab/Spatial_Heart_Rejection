@@ -23,6 +23,6 @@ Ravi V Shah, MD, ravi.shah@vumc.org<br>
 Nicholas Banovich, PhD, nbanovich@tgen.org 
 
 
-**BiorXiv preprint:** 
+**BiorXiv preprint: https://doi.org/10.1101/2025.02.28.640852** 
 
-**GEO accession:** 
+**GEO accession: GSE290577** 
