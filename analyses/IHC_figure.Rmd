@@ -1,0 +1,58 @@
+---
+title: "IHC"
+author: "Kaushik Amancherla"
+date: "2025-07-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(survival)
+library(ggsci)
+library(gtsummary)
+library(survival)
+library(timereg)
+library(tidyplots)
+
+# Set working directory
+setwd("C:/Users/amanchk/Downloads/Rejection - spatial work/Manuscript/Pre-final/Final_drafts/Pre-final_2.25.25/Pre-final_2.26.2025/Final submission/Revision/IHC")
+```
+
+## Load files
+
+IHC_results_7.23.25.csv 
+"254a384c767903a5afe0612701424b68"
+
+```{r}
+# Load rejection data
+ihc_results <- read_csv("IHC_results_7.23.25.csv")
+tools::md5sum("IHC_results_7.23.25.csv")
+```
+
+## Visualize
+
+```{r}
+# Pivot long
+ihc_results_long <- ihc_results %>%
+  pivot_longer(
+    cols = c(CD3, CD8, CD68),
+    names_to = "marker",
+    values_to = "value"
+  )
+
+ihc_results_long |> 
+  tidyplot(x = marker, y = value, color = rej_phenotype) |> 
+  add_violin(linewidth = 0.5) |> 
+  add_sem_errorbar() |> 
+  add_data_points() |>
+  add_median_value()  %>%
+  adjust_legend_title("Rejection Phenotype") %>%
+  add_test_pvalue(method = "wilcox_test", ref.group = "Non-rejecting") %>%
+  add_test_asterisks(method = "wilcox_test", hide_info = TRUE) %>%
+  adjust_size(100, 100) +
+  xlab("Marker") +
+  ylab("Percent cell positive for marker (%)")
+  
+# ggsave("violin_w_stats.png", bg = "white", dpi = 1200)
+```
