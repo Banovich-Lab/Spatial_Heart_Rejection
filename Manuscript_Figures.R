@@ -643,7 +643,7 @@ draw(hp)
 dev.off()
 
 
-# Figure 2B ----
+# Figure 2C ----
 enrich_score <- readRDS("/home/aoill/projects/heart_transplant/00_final/cell_prox_AMR_biopsies_pre.rds")
 
 
@@ -705,7 +705,7 @@ hp <- Heatmap(t(ct_or), name = 'log(OR)',
 ) 
 
 
-pdf("/home/aoill/plots/Figure_02B.pdf",
+pdf("/home/aoill/plots/Figure_02C.pdf",
     width = 12,
     height = 10)
 draw(hp)
@@ -1117,7 +1117,7 @@ dev.off()
 
 # Figure 4A ----
 # DGE analysis pre-treatment samples AMR vs ACR
-# THIS IS SUPPLEMENTARY TABLE 2. SEE DEG_pre_AMR_CR.R
+# THIS IS SUPPLEMENTARY TABLE 3. SEE T_test_pre_AMR_CR.R
 # FOR HOW THIS FILE WAS GENERATED
 # Volcano plot
 acr_v_amr <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/t_test_AMR_vs_CR_results.csv")
@@ -1175,7 +1175,7 @@ dev.off()
 # DGE analysis pre-treatment samples AMR vs ACR
 # Gene set enrichment analysis (GSEA) depicting results of hallmark pathways 
 # that showed significance at an FDR < 0.1.
-# gsea_results.acr_v_amr IS SUPPLEMENTARY TABLE 3. SEE GSEA_from_DEG_pre_AMR_CR.R
+# gsea_results.acr_v_amr IS SUPPLEMENTARY TABLE 4. SEE GSEA_from_DEG_pre_AMR_CR.R
 # FOR HOW THIS FILE WAS GENERATED 
 gsea_results.acr_v_amr <- read.csv("/home/aoill/projects/heart_transplant/00_final/20250805_gsea_ACR_v_AMR.csv")
 
@@ -1208,7 +1208,7 @@ dev.off()
 
 # Figure 4D ----
 # DGE ACR pre-treatment resolution vs persistent (responders vs nonresponders)
-# THIS IS SUPPLEMENTARY TABLE 6. SEE DEG_pre_ACR_responders_nonresponders.R
+# THIS IS SUPPLEMENTARY TABLE 7. SEE lm_pre_ACR_responders_nonresponders.R
 # FOR HOW THIS FILE WAS GENERATED
 acr_resolved_v_persistent <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/lm_ACR_resp_vs_non_resp_results.csv")
 
@@ -1271,6 +1271,7 @@ dev.off()
 
 # Figure 5B ----
 # SEE GLMM_CAV_*.R FOR HOW FILES WERE GENERATED 
+# THESE ARE SIPPLEMENTAL TABLES 9-13.
 glmm_acr_pre_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/GLMM_CAV_grade_CR_pre_treatment_biopsies_revisions_fixed.csv")
 glmm_amr_post_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/GLMM_CAV_grade_AMR_post_treatment_biopsies_revisions_fixed.csv")
 glmm_amr_pre_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/GLMM_CAV_grade_AMR_pre_treatment_biopsies_revisions_fixed.csv")
