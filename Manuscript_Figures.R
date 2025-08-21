@@ -80,6 +80,14 @@ mycolors <- c(
 # This will be used for plotting
 clustered_obj <- readRDS("/scratch/aoill/projects/heart_transplant/GEO/heart_spatial_obj.rds")
 
+# Make cell groups file for explorer ----
+cell_groups <- clustered_obj@meta.data %>% dplyr::select(X, ct_second_pass)
+rownames(cell_groups) <- NULL
+colnames(cell_groups) <- c("cell_id", "group")
+head(cell_groups)
+write.csv(cell_groups, "/scratch/aoill/projects/heart_transplant/00_final/cell_types.csv",
+          quote = F, row.names = F)
+
 # Main figures ----
 # Figure 1A ----
 # Generated using biorender
@@ -223,37 +231,66 @@ a <- DimPlot(clustered_obj, group.by = "ct_second_pass",
   scale_color_manual(values = mycolors) +
   NoLegend() + 
   coord_fixed() + 
-  ggtitle(NULL) + 
-  theme(axis.ticks = element_blank(),
-        axis.text = element_blank(),
-        axis.title.x = element_blank(),  
-        axis.title.y = element_blank(),
-        axis.line = element_blank()
-  ) +  
+  ggtitle(NULL) +  
   xlab("UMAP 1") + ylab("UMAP 2")
 
+pa <- LabelClusters(a, id = "ct_second_pass", box = TRUE, size = 3.5, label.size = 0.1, 
+                    box.padding = 0.5, seed = 309,
+                    alpha = 0.8#, max.overlaps=Inf
+) 
 
-ggsave("/home/aoill/plots/00_heart_manuscript/UMAP_new.png", plot = a, width = 160, height = 160, units = "mm", dpi = 800)
+ggsave("/home/aoill/plots/00_heart_manuscript/revisions_01/UMAP.png", plot = pa, width = 180, height = 180, units = "mm", dpi = 800)
+
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/UMAP.pdf")
+pa
+dev.off()
+
 
 # Figure 1D ----
 # Bar plot with the number of cell per cell type faceted by lineage
 # Extract metadata from Seurat object
+endothelial_cells <- c("Activated endothelial", "BMX+ Activated endothelial", 
+                       "Endothelial", "Lymphatic endothelial", "Proliferating endothelial")
+
+stromal_cells <- c("Cardiomyocytes", "Adipocytes", "Fibroblasts", 
+                       "Myofibroblasts", "Pericytes", "POSTN+ Fibroblasts", 
+                       "Proliferating pericytes", "vSMCs")
+
+immune_cells <- c("B cells", "CD4+ T cells", "CD8+ T cells", "cDC1", "cDC2", 
+                  "Macrophages", "Mast", "mDC", "NK", "pDC", "Plasma", 
+                  "Proliferating DCs", "Proliferating T cells", 
+                  "SPP1+ Macrophages", "Treg")
+
+
+
+# Create a new column in the metadatato classify each cell type into its lineage2
+clustered_obj@meta.data <- clustered_obj@meta.data %>%
+  mutate(lineage2 = case_when(
+    ct_second_pass %in% endothelial_cells ~ "Endothelial",
+    ct_second_pass %in% stromal_cells ~ "Stromal",
+    ct_second_pass %in% immune_cells ~ "Immune",
+    TRUE ~ "Other"
+  ))
+
+
+# Bar plot with the number of cell per cell type faceted by lineage2
+# Extract metadata from Seurat object
 metadata <- clustered_obj@meta.data
 
-# Summarize the number of cells per cell type and lineage
+# Summarize the number of cells per cell type and lineage2
 cell_counts <- metadata %>%
-  group_by(lineage, ct_second_pass) %>%
-  summarise(cell_count = n(), .groups = "drop")
+  dplyr::group_by(lineage2, ct_second_pass) %>%
+  dplyr::summarise(cell_count = n(), .groups = "drop")
 
-# Reorder cell types (ct_second_pass) by cell count within each lineage
+# Reorder cell types (ct_second_pass) by cell count within each lineage2
 cell_counts <- cell_counts %>%
-  group_by(lineage) %>%
+  group_by(lineage2) %>%
   mutate(ct_second_pass = factor(ct_second_pass, levels = ct_second_pass[order(-cell_count)])) %>%
   ungroup()
 
 
-# Convert lineage to a factor for proper ordering
-cell_counts$lineage <- factor(cell_counts$lineage)
+# Convert lineage2 to a factor for proper ordering
+cell_counts$lineage2 <- factor(cell_counts$lineage2)
 
 # Add formatted cell count labels
 cell_counts <- cell_counts %>%
@@ -267,7 +304,7 @@ pb <- ggplot(cell_counts,
                  fill = ct_second_pass)) +
   geom_bar(stat = "identity") +  # Set bar width
   geom_text(aes(label = label), vjust = -0.5, size = 3.5) +  # Add labels above bars
-  facet_grid(~ lineage, scales = "free_x", space = "free") +  # Proportional facet widths
+  facet_grid(~ lineage2, scales = "free_x", space = "free") +  # Proportional facet widths
   scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +  # Add space above the bars
   scale_fill_manual(values=mycolors) + 
   theme_classic() +
@@ -284,7 +321,7 @@ pb <- ggplot(cell_counts,
   labs(
     y = "Number of Cells",
     title = "",
-    fill = "Lineage"
+    fill = "lineage2"
   ) 
 
 
@@ -306,15 +343,23 @@ for (i in striprt) {
 
 gridExtra::grid.arrange(bar_plot_table)
 
-ggsave("/home/aoill/plots/00_heart_manuscript/ct_numbers_bar_plot_new_colors_02.png", plot = gridExtra::grid.arrange(bar_plot_table), width = 280, height = 100, units = "mm", dpi = 800)
+ggsave("/home/aoill/plots/00_heart_manuscript/revisions_01/Figure_01D.png", plot = gridExtra::grid.arrange(bar_plot_table), width = 280, height = 100, units = "mm", dpi = 800)
+
+
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/Figure_01D.pdf",
+  width = 13, 
+  height = 4)
+gridExtra::grid.arrange(bar_plot_table)
+dev.off()
+
 
 
 # Figure 1E ----
 # Dot plot heatmap with select genes
 baby_marker_genes <- rev(c(
-  "PECAM1", "BMX", "POSTN", "LYVE1", "FHL2", "PDGFRA", "SEMA3C", "PDGFRB",
-  "MYH11", "PTPRC", "CD3E", "FOXP3", "GNLY", "MS4A1", "MZB1", "CD68", "SPP1", 
-  "ITGAX", "LILRA4", "MS4A2", "MKI67"))
+  "FHL2", "PECAM1", "POSTN", "BMX", "LYVE1", "ACKR1", "PDGFRA", "SEMA3C", "PDGFRB",
+  "MYH11", "ADIPOQ", "PTPRC", "CD3E", "CD8A", "CD4", "FOXP3", "GNLY", "MS4A1", "MZB1", "CD68", "CD163", "SPP1", 
+  "MS4A2", "ITGAX", "XCR1", "CD1C", "CD83", "LILRA4", "MKI67"))
 
 dotplot <- DotPlot(clustered_obj, group.by = "ct_second_pass", features = baby_marker_genes)
 
@@ -336,7 +381,9 @@ percent_mat <- dotplot_data %>%
   as.matrix() 
 
 # Ordering cell types
-exp_mat_reordered <- exp_mat[c("Endothelial", "Lymphatic endothelial", "Activated endothelial", 
+exp_mat_reordered <- exp_mat[c(
+                               
+                               "Endothelial", "Lymphatic endothelial", "Activated endothelial", 
                                "BMX+ Activated endothelial", "Proliferating endothelial", 
                                
                                "Cardiomyocytes", "Fibroblasts", "POSTN+ Fibroblasts", 
@@ -350,7 +397,9 @@ exp_mat_reordered <- exp_mat[c("Endothelial", "Lymphatic endothelial", "Activate
                                "mDC", "pDC", "Proliferating DCs"), ]
 
 # Ordering cell types
-percent_mat_reordered <- percent_mat[c("Endothelial", "Lymphatic endothelial", "Activated endothelial", 
+percent_mat_reordered <- percent_mat[c( 
+                                       
+                                       "Endothelial", "Lymphatic endothelial", "Activated endothelial", 
                                        "BMX+ Activated endothelial", "Proliferating endothelial", 
                                        
                                        "Cardiomyocytes", "Fibroblasts", "POSTN+ Fibroblasts", 
@@ -370,9 +419,9 @@ col_fun = circlize::colorRamp2(c(-2, 0, 2), colorspace::diverge_hsv(3))
 # Updating lineage order
 ct_col_order <- factor(c(
   rep("Endothelial", 5),
-  rep("Mesenchymal", 8),
+  rep("Stromal", 8),
   rep("Immune", 15)),
-  levels = c("Endothelial", "Mesenchymal", "Immune"))
+  levels = c("Endothelial", "Stromal", "Immune"))
 
 # Creating a layer to add to plot
 layer_fun = function(j, i, x, y, w, h, fill) {
@@ -385,13 +434,18 @@ layer_fun = function(j, i, x, y, w, h, fill) {
 # Create legend list for proportion and expression
 lgd_list = list(
   Legend(labels = c(0,0.25,0.5,0.75,1), title = "Proportion", type = "points", 
-         pch = 19, size = c(0,0.25,0.5,0.75,1) * unit(1.4, "mm"),
-         legend_gp = gpar(col = "black"), direction = "vertical", ncol = 1,
+         #pch = 19, size = c(0,0.25,0.5,0.75,1) * unit(1.4, "mm"),
+         pch = 19, size = c(0,0.25,0.5,0.75,1) * unit(1, "mm"),
+         legend_gp = gpar(col = "black"), direction = "horizontal", ncol = 1,
          title_position = "topcenter", background = NA, 
          grid_height = unit(2, "mm"),
-         grid_width = unit(2, "mm"),
+         grid_width = unit(4, "mm"),
          title_gp = gpar(fontsize = 4), labels_gp = gpar(fontsize = 4),
-         legend_height = unit(5, "mm")))
+         #legend_height = unit(5, "mm"),
+         legend_height = unit(2, "mm"),
+         legend_width = unit(10, "mm")
+  )
+)
 
 # Heatmap parameters
 hp <- Heatmap(t(exp_mat_reordered),
@@ -410,15 +464,15 @@ hp <- Heatmap(t(exp_mat_reordered),
               column_names_rot = 90,
               heatmap_legend_param = list(title = "Scaled\nexpression",
                                           labels = c("-2", "-1", "0", "1", "2"),
-                                          legend_direction = "vertical",
+                                          legend_direction = "horizontal",
                                           title_position = "topcenter",
                                           title_gp = gpar(fontsize = 4),
                                           labels_gp = gpar(fontsize = 4),
                                           background = NA,
-                                          grid_width = unit(2, "mm"),
-                                          grid_height = unit(10, "mm"),
-                                          legend_height = unit(10, "mm"),
-                                          legend_width = unit(2, "mm")),
+                                          grid_width = unit(10, "mm"),
+                                          grid_height = unit(2, "mm"),
+                                          legend_height = unit(2, "mm"),
+                                          legend_width = unit(10, "mm")),
               cluster_rows = FALSE, 
               cluster_columns = FALSE,
               cluster_row_slices = FALSE,
@@ -426,12 +480,12 @@ hp <- Heatmap(t(exp_mat_reordered),
 
 ht <- draw(hp, 
            heatmap_legend_list = lgd_list,
-           heatmap_legend_side = "right",
-           annotation_legend_side = "right")
+           heatmap_legend_side = "bottom",
+           annotation_legend_side = "bottom")
 
 
-pdf("/home/aoill/plots/00_heart_manuscript/dotplot_small_02.pdf", 
-    width = 2.75, height = 2.35)
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/Figure_01E_new.pdf", 
+    width = 2.75, height = 3.25)
 ht
 dev.off()
 
@@ -445,6 +499,24 @@ cell_prop_by_rej_type <- read_csv("/home/aoill/projects/heart_transplant/propell
 
 
 # Transform the data into long format
+desired_cell_type_order <- c(
+  
+  # Endothelial
+  "Endothelial", "Activated endothelial", "BMX+ Activated endothelial", 
+  "Proliferating endothelial", "Lymphatic endothelial", 
+  
+  # Immune
+  "CD8+ T cells", "Macrophages", "NK", "Plasma", 
+  "cDC2", "CD4+ T cells", "B cells", "Proliferating T cells", 
+  "cDC1", "Treg", "SPP1+ Macrophages", "Mast", "pDC", "mDC", 
+  "Proliferating DCs", 
+  
+  # Stromal
+  "Cardiomyocytes", "Fibroblasts", "Pericytes", "POSTN+ Fibroblasts", "vSMCs", 
+  "Myofibroblasts", "Adipocytes", "Proliferating pericytes"
+)
+
+
 cell_prop_long <- cell_prop_by_rej_type %>%
   pivot_longer(
     cols = starts_with("PropMean"),
@@ -455,8 +527,8 @@ cell_prop_long <- cell_prop_by_rej_type %>%
     rejection_type = str_replace(rejection_type, "PropMean\\.", ""),
     significance = ifelse(FDR < 0.10, "***", "")
   ) %>%
-  rename(
-    cell_type = `...1`
+  dplyr::rename(
+    cell_type = `...1` # Use dplyr::rename if masking is an issue
   ) %>%
   mutate(
     rejection_type = case_when(
@@ -464,29 +536,23 @@ cell_prop_long <- cell_prop_by_rej_type %>%
       rejection_type == "mixed_rejection" ~ "Mixed rejection",
       rejection_type == "cellular_rejection" ~ "ACR",
       rejection_type == "antibody_rejection." ~ "AMR"
-    )
+    ),
+    cell_type = factor(cell_type, levels = desired_cell_type_order)
   ) %>%
   dplyr::select(-BaselineProp, -Fstatistic, -P.Value)
 
 
-# Create bar plots for each cell type
 p1 <- cell_prop_long %>%
   ggplot(aes(x = rejection_type, y = proportion, fill = cell_type)) +
-  geom_bar(stat = "identity", position = "fill", #color = "black"
-  ) +
-  scale_fill_manual(values = mycolors) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_fill_manual(values = mycolors) + # This will use your defined colors
   cowplot::theme_cowplot() +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, #face = "bold", 
-                               size = 16),
-    axis.text.y = element_text(#face = "bold", 
-      size = 16),
-    axis.title.x = element_text(#face = "bold", 
-      size = 16),
-    axis.title.y = element_text(#face = "bold", 
-      size = 16),
-    legend.title = element_text(#face = "bold", 
-      size = 16),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 16),
+    axis.text.y = element_text(size = 16),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    legend.title = element_text(size = 16),
     legend.text = element_text(size = 12),
     panel.grid = element_blank()
   ) +
@@ -502,11 +568,10 @@ p1 <- cell_prop_long %>%
 p1
 
 
-pdf("/home/aoill/plots/00_heart_manuscript/cell_prop_updated.pdf", 
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/Figure_01F.pdf", 
     width = 7.25, height = 8.75)
 p1
 dev.off()
-
 
 
 # Figure 2 ----
@@ -1055,27 +1120,42 @@ dev.off()
 # THIS IS SUPPLEMENTARY TABLE 2. SEE DEG_pre_AMR_CR.R
 # FOR HOW THIS FILE WAS GENERATED
 # Volcano plot
-acr_v_amr <- read_csv("/home/aoill/projects/heart_transplant/00_final/DGE_CR_vs_AMR_fixed_exp_pre_only_smpl_fixed.csv")
+acr_v_amr <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/t_test_AMR_vs_CR_results.csv")
 
-pdf("/home/aoill/plots/00_heart_manuscript/DGE_volcano_AMRvsACR_redo_new.pdf",
-    width = 9, height = 5)
-ggplot(acr_v_amr, aes(x = logFC, y = -log10(adj.P.Val), color = cell_type, alpha = adj.P.Val < 0.05)) +
+
+vp <- ggplot(acr_v_amr, aes(x = Log2FC, y = -log10(padj), color = cell_type, alpha = padj < 0.05)) +
   geom_point() +
   cowplot::theme_cowplot() +
   scale_alpha_manual(values = c(0.1, 1)) +
   scale_color_manual(values = mycolors, name = "Cell Type") +
-  labs(x = "LogFC", y = "-log10(adj. p-value)") + 
+  labs(x = "LogFC", y = "-log10(Adj. p-value)") +
+  scale_x_continuous(breaks = seq(-4, 4, by = 2)) +
+  geom_segment(data = NULL, inherit.aes = FALSE,
+               aes(x = 0.25, y = 6, xend = 4, yend = 6),
+               arrow = arrow(type = "closed", length = unit(0.1, "inches")),
+               color = "black") +
+  annotate("text", x = 1.8, y = 6.4, label = "Upregulated in ACR", size = 4.5, hjust = 0.5) +
+  geom_segment(data = NULL, inherit.aes = FALSE,
+               aes(x = -0.25, y = 6, xend = -4, yend = 6),
+               arrow = arrow(type = "closed", length = unit(0.1, "inches")),
+               color = "black") +
+  annotate("text", x = -1.8, y = 6.4, label = "Upregulated in AMR", size = 4.5, hjust = 0.5) + 
   geom_hline(yintercept=-log10(0.05), linetype="dashed")
 
+
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/t_test_volcano_AMRvsACR.pdf",
+    width = 9, height = 6)
+vp
 dev.off()
+
 
 # Figure 4B ----
 # DGE analysis pre-treatment samples AMR vs ACR
 # Bar plot of the number of significant DEGs among cell types
 fdr.acr_v_amr <- acr_v_amr %>%
-  filter(adj.P.Val < 0.05)
+  filter(padj < 0.05)
 
-pdf("/home/aoill/plots/00_heart_manuscript/DGE_num_genes_per_ct_AMRvsACR_new.pdf",
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/t_test_num_genes_per_ct_AMRvsACR_new.pdf",
     width = 8, height = 5
 )
 ggplot(fdr.acr_v_amr %>%
@@ -1097,15 +1177,16 @@ dev.off()
 # that showed significance at an FDR < 0.1.
 # gsea_results.acr_v_amr IS SUPPLEMENTARY TABLE 3. SEE GSEA_from_DEG_pre_AMR_CR.R
 # FOR HOW THIS FILE WAS GENERATED 
-gsea_results.acr_v_amr <- read.csv("/home/aoill/projects/heart_transplant/00_final/20250225_gsea_ACR_v_AMR.csv")
+gsea_results.acr_v_amr <- read.csv("/home/aoill/projects/heart_transplant/00_final/20250805_gsea_ACR_v_AMR.csv")
+
 # Filter pathways with padj < 0.1
 filtered_data <- gsea_results.acr_v_amr %>%
   filter(padj < 0.1) %>%
   mutate(pathway = fct_reorder(pathway, NES))
 
 # Create lollipop plot
-pdf("/home/aoill/plots/00_heart_manuscript/GSEA_AMR_ACR_lollipop_plot.pdf",
-    width = 8, height = 5)
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/GSEA_AMR_ACR_lollipop_plot_revised_01.pdf",
+    width = 8, height = 4.5)
 ggplot(filtered_data, aes(x = NES, y = pathway, color = cell_type)) +
   geom_segment(aes(x = 0, xend = NES, y = pathway, yend = pathway), color = "grey") +
   geom_point(size = 5) +
@@ -1129,21 +1210,37 @@ dev.off()
 # DGE ACR pre-treatment resolution vs persistent (responders vs nonresponders)
 # THIS IS SUPPLEMENTARY TABLE 6. SEE DEG_pre_ACR_responders_nonresponders.R
 # FOR HOW THIS FILE WAS GENERATED
-acr_resolved_v_persistent <- read_csv("/home/aoill/projects/heart_transplant/00_final/DGE_CR_pre_resolved_vs_persistence_exp_fixed_pseudo_by_biopsy.csv")
+acr_resolved_v_persistent <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/lm_ACR_resp_vs_non_resp_results.csv")
 
 # Visualize with limited x-axis
-pdf("/home/aoill/plots/00_heart_manuscript/DGE_volcano_ACR_resp_nonresp_redo_new_nolegend.pdf",
-    width = 4.5, height = 5)
-ggplot(acr_resolved_v_persistent, aes(x = logFC, y = -log10(adj.P.Val), color = cell_type, alpha = adj.P.Val < 0.05)) +
+vp2 <- ggplot(acr_resolved_v_persistent, aes(x = estimate, y = -log10(padj), 
+                                      color = cell_type, alpha = padj < 0.05)) +
   geom_point() +
   cowplot::theme_cowplot() +
   scale_alpha_manual(values = c(0.1, 1)) +
   scale_color_manual(values = mycolors, name = "Cell Type") +
-  labs(x = "LogFC", y = "-log10(adj. p-value)") +
-  scale_x_continuous(limits = c(-1, 1)) + 
-  geom_hline(yintercept=-log10(0.05), linetype="dashed") + NoLegend()
-dev.off()
+  labs(x = "β", y = "-log10(Adj. p-value)") +
+  scale_x_continuous(limits = c(-1, 1)) +
+  geom_segment(data = NULL, inherit.aes = FALSE,
+               aes(x = 0.25, y = 3.5, xend = 0.9, yend = 3.5),
+               arrow = arrow(type = "closed", length = unit(0.1, "inches")),
+               color = "black") +
+  annotate("text", x = 0.5, y = 3.8, label = "Upregulated in Non-Responders", size = 4.5, hjust = 0.5) +
+  geom_segment(data = NULL, inherit.aes = FALSE,
+               aes(x = -0.25, y = 3.5, xend = -0.9, yend = 3.5),
+               arrow = arrow(type = "closed", length = unit(0.1, "inches")),
+               color = "black") +
+  annotate("text", x = -0.5, y = 3.8, label = "Upregulated in Responders", size = 4.5, hjust = 0.5) + NoLegend() +
+  geom_hline(yintercept=-log10(0.05), linetype="dashed")
 
+
+
+vp2
+
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/lm_volcano_ACR_resp_nonresp_revised_01.pdf",
+    width = 7, height = 9)
+print(vp2)
+dev.off()
 
 # Figure 4E ----
 # DGE ACR pre-treatment resolution vs persistent (responders vs nonresponders)
@@ -1151,9 +1248,9 @@ dev.off()
 acr_resolved_v_persistent_fdr_05 <- acr_resolved_v_persistent %>%
   filter(adj.P.Val < 0.05)
 
-pdf("/home/aoill/plots/00_heart_manuscript/DGE_num_genes_per_ct_ACR_resp_nonresp_new.pdf",
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/DGE_num_genes_per_ct_ACR_resp_nonresp_revised_01.pdf",
     #width = 8, 
-    width = 6, height = 5
+    width = 5, height = 4
 )
 ggplot(acr_resolved_v_persistent_fdr_05 %>%
          count(cell_type) %>%
@@ -1165,7 +1262,8 @@ ggplot(acr_resolved_v_persistent_fdr_05 %>%
   cowplot::theme_cowplot() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   Seurat::NoLegend()
-dev.off()
+dev.off() 
+
 
 # Figure 5 ----
 # Figure 5A ----
@@ -1173,11 +1271,11 @@ dev.off()
 
 # Figure 5B ----
 # SEE GLMM_CAV_*.R FOR HOW FILES WERE GENERATED 
-glmm_acr_pre_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/GLMM_CAV_grade_CR_pre_treatment_biopsies_NEW.csv")
-glmm_amr_post_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/GLMM_CAV_grade_AMR_post_treatment_biopsies_NEW.csv")
-glmm_amr_pre_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/GLMM_CAV_grade_AMR_pre_treatment_biopsies_NEW.csv")
-glmm_acr_post_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/GLMM_CAV_grade_CR_post_treatment_biopsies_NEW.csv")
-glmm_mixed_pre_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/GLMM_CAV_grade_Mixed_pre_treatment_biopsies_NEW.csv")
+glmm_acr_pre_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/GLMM_CAV_grade_CR_pre_treatment_biopsies_revisions_fixed.csv")
+glmm_amr_post_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/GLMM_CAV_grade_AMR_post_treatment_biopsies_revisions_fixed.csv")
+glmm_amr_pre_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/GLMM_CAV_grade_AMR_pre_treatment_biopsies_revisions_fixed.csv")
+glmm_acr_post_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/GLMM_CAV_grade_CR_post_treatment_biopsies_revisions_fixed.csv")
+glmm_mixed_pre_cav <- read_csv("/home/aoill/projects/heart_transplant/00_final/revisions/GLMM_CAV_grade_Mixed_pre_treatment_biopsies_revisions_fixed.csv")
 
 # Create the list of all genes from the GLMM models
 gene.list.ALL <- bind_rows(glmm_acr_pre_cav, glmm_acr_post_cav,
@@ -1192,10 +1290,13 @@ top_genes <- gene.list.ALL %>%
   slice_head(n = 20)
 
 # Visualize
-pdf("/home/aoill/plots/00_heart_manuscript/CAV_GLMM_all_volcano.pdf",
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/CAV_GLMM_all_volcano_revised_01.pdf",
     width = 10, height = 6
 )
-ggplot(gene.list.ALL, aes(x = beta, y = -log10(padj), color = ct, alpha = padj < 0.05)) +
+ggplot(gene.list.ALL, aes(x = beta, 
+                          y = -log10(padj), 
+                          color = ct, 
+                          alpha = padj < 0.05)) +
   geom_point() +
   cowplot::theme_cowplot() +
   ggrepel::geom_text_repel(
@@ -1210,7 +1311,7 @@ ggplot(gene.list.ALL, aes(x = beta, y = -log10(padj), color = ct, alpha = padj <
   ) +
   scale_alpha_manual(values = c(0.05, 1)) +
   scale_color_manual(values = mycolors, name = "Cell Type") +
-  labs(x = "β", y = "-log10(p-value)")
+  labs(x = "β", y = "-log10(Adj. p-value)")
 dev.off()
 
 
@@ -1224,7 +1325,7 @@ top_genes.lollipop <- gene.list.ALL %>%
 length(unique(top_genes.lollipop$genei)) # 50 unique genes
 
 # Visualize
-pdf("/home/aoill/plots/00_heart_manuscript/betas_CAV_top50_lollipop.pdf",
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/betas_CAV_top50_lollipop_revised_01.pdf",
     width = 7, height = 9
 )
 ggplot(top_genes.lollipop, aes(x = reorder(genei, desc(beta)), y = beta, fill = ct)) +
@@ -1235,7 +1336,6 @@ ggplot(top_genes.lollipop, aes(x = reorder(genei, desc(beta)), y = beta, fill = 
   cowplot::theme_cowplot() +
   labs(x = "Gene", y = "β", fill = "Cell Type")
 dev.off()
-
 
 
 
@@ -1353,7 +1453,7 @@ lgd_list = list(
           title = "Proportion", 
           type = "points", 
           pch = 16, 
-          size = c(0,0.25,0.5,0.75,1) * unit(2,"mm"),
+          size = c(0,0.25,0.5,0.75,1) * unit(4,"mm"),
           legend_gp = gpar(col = "black"),
           background = NA,
           title_gp = gpar(fontsize = 8),
@@ -1364,9 +1464,9 @@ lgd_list = list(
 
 ct_col_order <- factor(c(
   rep("Endothelial", 5),
-  rep("Mesenchymal", 8),
+  rep("Stromal", 8),
   rep("Immune", 15)),
-  levels = c("Endothelial", "Mesenchymal", "Immune"))
+  levels = c("Endothelial", "Stromal", "Immune"))
 
 hp <- Heatmap((exp_mat), # t(exp_mat)
               heatmap_legend_param=list(ncol = 1, 
@@ -1399,7 +1499,7 @@ hp <- Heatmap((exp_mat), # t(exp_mat)
               column_split = ct_col_order
 )
 
-pdf("/home/aoill/plots/00_heart_manuscript/Extended_data_01_dot_heat.pdf",
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/Extended_data_01_new.pdf",
     width = 7, height = 10)
 draw(hp,
      heatmap_legend_list = lgd_list,
@@ -1408,7 +1508,6 @@ draw(hp,
      align_heatmap_legend = "global_center"
 )
 dev.off()
-
 
 
 # Supplementary Figures ----
@@ -1458,6 +1557,8 @@ conf_clustered_obj_meta_short <- conf_clustered_obj_meta %>%
   dplyr::select(Sample, patient_id, patient_biopsy, ct_second_pass, biopsy_rejection_type, data_set, lineage)
 
 head(conf_clustered_obj_meta_short)
+# replace mesenchymal with stromal in lineage colunm
+conf_clustered_obj_meta_short$lineage <- str_replace_all(conf_clustered_obj_meta_short$lineage, "Mesenchymal", "Stromal")
 
 
 # Get cell type proportions for each Sample and save to a data frame along with
@@ -1492,7 +1593,7 @@ all_props_filter <- all_props %>%
   filter(lineage != "Neural")
 
 # Plot all results
-pdf("/home/aoill/plots/00_heart_manuscript/atlas_comparison_boxplot.pdf",
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/atlas_comparison_boxplot_new.pdf",
     width = 7, height = 2.75)
 ggplot(all_props_filter, aes(x = data_set, y = Proportion, fill = data_set)) +
   geom_boxplot() +
@@ -1513,6 +1614,7 @@ ggplot(all_props_filter, aes(x = data_set, y = Proportion, fill = data_set)) +
   scale_x_discrete(labels= c("Spatial\n(rejection)", "Spatial\n(no rejection)", "HCA")) +
   NoLegend()
 dev.off()
+
 
 
 # Supplementary Figure 3 ----
@@ -1674,13 +1776,21 @@ patient_info_df <- conf_clustered_obj_pre_CR@meta.data %>%
 rownames(patient_info_df) <- NULL
 head(patient_info_df)
 
-# Plot
-pdf("/home/aoill/plots/00_heart_manuscript/resolution_dist_TMA_grade_ACR.pdf",
-    width = 5, height = 4)
 # Biopsy level grading
-ggplot(patient_info_df, aes(x=biopsy_cellular_grading, fill=resolution_broad)) +
+p1 <- ggplot(patient_info_df, aes(x=biopsy_cellular_grading, fill=resolution_broad)) +
   geom_histogram(alpha=0.5, position="identity", binwidth = 1) +
   xlab("TMA cellular grade") +
   theme_classic()
+
+# Plot
+pdf("/home/aoill/plots/00_heart_manuscript/revisions_01/resolution_dist_TMA_grade_ACR.pdf",
+    width = 5, height = 4)
+print(p1)
 dev.off()
+
+# also save as a png
+ggsave("/home/aoill/plots/00_heart_manuscript/revisions_01/resolution_dist_TMA_grade_ACR.png", 
+       plot = p1, width = 110, height = 72, units = "mm", dpi = 800)
+
+
 
